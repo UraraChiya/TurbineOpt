@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>涡轮线圈布局优化器 · Turbine Coil Optimizer</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header>
+  <h1>涡轮线圈布局优化器</h1>
+  <p class="sub">NuclearCraft: Overhauled 涡轮机端面线圈 / 电磁铁布局自动优化 —— 最大化导电率</p>
+</header>
+
+<main>
+  <section class="panel controls">
+    <h2>参数</h2>
+
+    <div class="row">
+      <label>线圈平面边长 N
+        <input type="number" id="in-n" value="11" min="3" max="25" step="1">
+      </label>
+      <label>轴承边长 B
+        <input type="number" id="in-b" value="3" min="1" max="25" step="1">
+      </label>
+    </div>
+
+    <div class="row">
+      <label>优化时间（秒）
+        <input type="number" id="in-time" value="3" min="0.5" max="60" step="0.5">
+      </label>
+      <label>每面预留格数
+        <input type="number" id="in-reserve-count" value="2" min="0" max="8" step="1">
+      </label>
+    </div>
+
+    <p class="hint">预留格用于放置控制器与流体输入/输出口，会保持为空。点击右侧网格可直接设置/取消预留格。</p>
+
+    <fieldset class="coils">
+      <legend>可用线圈</legend>
+      <div class="coil-toolbar">
+        <input type="search" id="coil-search" placeholder="搜索线圈…">
+        <button type="button" id="btn-all-on" class="mini">全部启用</button>
+        <button type="button" id="btn-all-off" class="mini">全部禁用</button>
+        <button type="button" id="btn-bases" class="mini">仅原版 6 种</button>
+      </div>
+      <div id="coil-list" class="coil-list"></div>
+      <p class="hint">“上限”留空表示不限；填 0 等同于禁用。</p>
+    </fieldset>
+
+    <div class="row actions">
+      <button id="btn-run" class="primary">开始优化</button>
+      <button id="btn-stop" disabled>停止</button>
+    </div>
+    <div class="progress" id="progress-wrap" hidden>
+      <div class="bar"><div id="progress-bar"></div></div>
+      <span id="progress-text"></span>
+    </div>
+    <p id="error" class="error" hidden></p>
+  </section>
+
+  <section class="panel preview">
+    <h2>布局预览</h2>
+    <div class="canvas-wrap">
+      <canvas id="grid"></canvas>
+      <div id="tooltip" class="tooltip" hidden></div>
+    </div>
+    <div id="legend" class="legend"></div>
+  </section>
+</main>
+
+<section class="panel results" id="results" hidden>
+  <h2>结果</h2>
+  <div class="stats">
+    <div class="stat"><span class="k">每面导电率</span><span class="v" id="st-eff">–</span></div>
+    <div class="stat"><span class="k">有效线圈数 M</span><span class="v" id="st-m">–</span></div>
+    <div class="stat"><span class="k">导电率总和 S</span><span class="v" id="st-s">–</span></div>
+    <div class="stat"><span class="k">分母 max(B², M)</span><span class="v" id="st-denom">–</span></div>
+    <div class="stat"><span class="k">连接器数</span><span class="v" id="st-conn">–</span></div>
+  </div>
+  <p class="hint">涡轮机两个端面使用相同布局，因此整机总导电率为上述每面数值（两端面相同取平均）。</p>
+
+  <h2>导出</h2>
+  <div class="row actions">
+    <button id="btn-snbt" class="primary">建筑小帮手 · 复制到剪贴板</button>
+    <button id="btn-snbt-file">建筑小帮手 · 下载 .snbt</button>
+    <button id="btn-nbt">结构方块 · 下载 .nbt</button>
+    <button id="btn-mcfunction">命令 · 下载 .mcfunction</button>
+  </div>
+  <label class="origin-row">导出原点 X / Y / Z：
+    <input type="number" id="ox" value="0">
+    <input type="number" id="oy" value="64">
+    <input type="number" id="oz" value="0">
+  </label>
+  <label class="fill-row">剩余墙体填充：
+    <select id="in-fill">
+      <option value="casing">涡轮机外壳（casing）</option>
+      <option value="glass">涡轮机玻璃（glass）</option>
+    </select>
+  </label>
+  <textarea id="snbt-out" readonly spellcheck="false" placeholder="建筑小帮手模板（1.12.2：复制后在模板管理器点击 Paste）"></textarea>
+  <p class="hint">
+    建筑小帮手 1.12.2 的模板以剪贴板 NBT 文本交互：点击“复制到剪贴板”，在游戏内模板管理器（Template Manager）点击 <b>Paste</b> 即可导入。
+    结构方块 <code>.nbt</code> 需放入 <code>&lt;存档&gt;/generated/minecraft/structure/</code> 后用结构方块加载。
+    <code>.mcfunction</code> 可放入数据包 functions 或命令方块逐行执行。
+  </p>
+</section>
+
+<footer>
+  <p>线圈数据来自 <code>scripts/NTP/*.zs</code> 与 NuclearCraft 默认配置；规则与 <code>TurbineLogic.refreshDynamos</code> 一致。</p>
+</footer>
+
+<script src="js/coils.js"></script>
+<script src="js/rules.js"></script>
+<script src="js/nbt.js"></script>
+<script src="js/optimizer.js"></script>
+<script src="js/export.js"></script>
+<script src="js/colors.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
