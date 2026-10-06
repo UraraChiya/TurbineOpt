@@ -84,6 +84,7 @@ input[type="number"], input[type="search"], select, textarea {
   width: 100%;
 }
 input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+input:disabled, select:disabled, textarea:disabled { opacity: .5; cursor: not-allowed; }
 
 button {
   background: var(--panel-2);

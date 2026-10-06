@@ -316,6 +316,7 @@
   }
 
   function onClick(ev) {
+    if (state.running) return; // frozen while optimising
     var canvas = $('grid');
     if (!state.opt || !canvas._cell) return;
     var rect = canvas.getBoundingClientRect();
@@ -357,6 +358,24 @@
     $('btn-run').textContent = on ? '运行中…' : '开始优化';
     $('btn-pause').disabled = !on;
     $('btn-stop').disabled = !on;
+    setControlsEnabled(!on);
+  }
+
+  // While optimising (running or paused) the problem itself is frozen: no
+  // size / reserve / fill / coil / limit changes and no re-pinning of reserved
+  // cells. Export controls stay usable because they reflect the live best.
+  function setControlsEnabled(on) {
+    ['in-n', 'in-b', 'in-reserve-count', 'in-fill',
+     'btn-all-on', 'btn-all-off', 'btn-bases'].forEach(function (id) {
+      var el = $(id); if (el) el.disabled = !on;
+    });
+    var list = $('coil-list');
+    if (!list || !list.children) return;
+    for (var i = 0; i < list.children.length; i++) {
+      var row = list.children[i];
+      if (row.children[0]) row.children[0].disabled = !on;
+      if (row.children[4]) row.children[4].disabled = !on;
+    }
   }
 
   function setPaused(p) {
