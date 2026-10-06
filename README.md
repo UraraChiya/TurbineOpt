@@ -28,6 +28,16 @@ NuclearCraft: Overhauled 涡轮机（Turbine）端面**线圈 / 电磁铁布局*
 都会自动保存到浏览器 **localStorage**（键 `turbineopt.settings.v1`），刷新或重新打开页面后自动恢复；
 清除浏览器站点数据即可重置。
 
+## 部署到 GitHub Pages
+
+仓库自带 [`.github/workflows/pages.yml`](.github/workflows/pages.yml)：推送到 `master` 分支会自动发布，
+也可在仓库 **Actions → Deploy to GitHub Pages → Run workflow** 手动触发。工作流只收集运行时需要的静态文件
+（`index.html`、`css/`、`js/`、`assets/`），不会上传 `resources/`、`scripts/`、`tools/`、jar 等构建素材，
+因此发布产物很小。
+
+首次启用需在仓库 **Settings → Pages → Source** 选择 **GitHub Actions**（工作流里的 `configure-pages`
+也会尝试自动开启）。发布地址形如 `https://<用户名>.github.io/<仓库名>/`。
+
 ## 导电率模型
 
 与游戏内 `nc.multiblock.turbine.TurbineLogic` 完全一致：
@@ -138,6 +148,7 @@ tools/parse_coils.py   线圈数据生成脚本
 tools/build_atlas.py   材质图集生成脚本
 resources/          资源包（blockstates / textures / lang）
 scripts/NTP/        NTP 附加线圈定义
+.github/workflows/pages.yml   GitHub Pages 部署工作流
 ```
 
 ## 已知限制

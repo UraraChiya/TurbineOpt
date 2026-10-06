@@ -1,0 +1,62 @@
+name: Deploy to GitHub Pages
+
+# Publishes the TurbineOpt static site to GitHub Pages.
+# First run: make sure Settings → Pages → Source is set to "GitHub Actions"
+# (the configure-pages step below tries to enable it automatically).
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+# Allow GITHUB_TOKEN to deploy to Pages and verify the deployment origin.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one Pages deployment at a time; newer pushes cancel in-progress runs.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          # Try to enable Pages (source = GitHub Actions) on first run.
+          enablement: true
+
+      # The app is pure static HTML/CSS/JS, so there is nothing to build.
+      # Collect only the files the browser needs (skip resources/, scripts/,
+      # tools/ and the Python project files, which are not used at runtime).
+      - name: Assemble site
+        run: |
+          set -euo pipefail
+          mkdir -p _site
+          cp index.html _site/
+          cp -r css js assets _site/
+          # Serve without Jekyll processing (paths that start with "_" are fine).
+          touch _site/.nojekyll
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
