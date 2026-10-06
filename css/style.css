@@ -57,6 +57,14 @@ main {
 .row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
 .row.actions { margin-top: 14px; gap: 10px; }
 
+/* Four top-left config items in a 2x2 block. */
+.params-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+  margin-bottom: 10px;
+}
+
 label {
   display: flex;
   flex-direction: column;
@@ -199,7 +207,6 @@ fieldset.coils legend { color: var(--muted); font-size: 12px; padding: 0 6px; }
 
 .origin-row { flex-direction: row; align-items: center; gap: 8px; margin: 12px 0; color: var(--muted); flex-wrap: wrap; }
 .origin-row input { width: 90px; }
-.fill-row { max-width: 260px; margin: 4px 0 12px; }
 
 #snbt-out {
   width: 100%;
