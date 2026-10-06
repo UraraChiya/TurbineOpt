@@ -33,11 +33,12 @@
     };
   }
 
-  // Inline style string for use inside innerHTML.
+  // Inline style string for use inside innerHTML (the enclosing attribute uses
+  // double quotes, so the url must use single quotes).
   function cssText(key, px) {
     var s = style(key, px);
     if (!s) return '';
-    return 'background-image:url("' + atlas.url + '");' +
+    return "background-image:url('" + atlas.url + "');" +
       'background-size:' + s.backgroundSize + ';' +
       'background-position:' + s.backgroundPosition + ';' +
       'background-repeat:no-repeat;image-rendering:pixelated;';
