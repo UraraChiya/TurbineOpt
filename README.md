@@ -85,7 +85,7 @@ NuclearCraft: Overhauled 涡轮机（Turbine）端面**线圈 / 电磁铁布局*
   并从 [`resources/lang/`](resources/lang) 读取中英文名称。修改脚本后重新运行：
 
   ```bash
-  uv run python tools/parse_coils.py
+  uv run tools/parse_coils.py
   ```
 
 ## 材质与图标
@@ -102,7 +102,7 @@ NuclearCraft: Overhauled 涡轮机（Turbine）端面**线圈 / 电磁铁布局*
 坐标索引 [`js/atlas.js`](js/atlas.js)。修改或新增材质后重新运行：
 
 ```bash
-uv run python tools/build_atlas.py
+uv run tools/build_atlas.py
 ```
 
 图集按像素图渲染（`image-rendering: pixelated` / 关闭 `imageSmoothingEnabled`），不做平滑缩放。
