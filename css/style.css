@@ -94,6 +94,7 @@ button.primary:hover:not(:disabled) { background: #6aabff; }
 button.mini { padding: 5px 8px; font-size: 12px; }
 
 .hint { color: var(--muted); font-size: 12px; line-height: 1.6; margin: 8px 0 0; }
+.warn { color: var(--warn); font-size: 13px; line-height: 1.6; margin: 10px 0 0; }
 .error { color: var(--danger); font-size: 13px; margin: 10px 0 0; }
 
 fieldset.coils {

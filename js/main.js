@@ -267,6 +267,19 @@
     $('st-s').textContent = r.S.toFixed(2);
     $('st-denom').textContent = denom;
     $('st-conn').textContent = conn;
+
+    // Warn when the face is not filled up to the per-face bearing count.
+    var b2 = state.B * state.B;
+    var warn = $('m-warn');
+    if (r.M < b2) {
+      warn.hidden = false;
+      warn.textContent = '注意：该面有效线圈 M = ' + r.M + ' < 每面轴承数 B² = ' + b2 +
+        '，分母被固定为 B²，该面产出按比例缩水（同种线圈时约为 ' + (r.M / b2).toFixed(2) +
+        ' 倍）。建议每面至少放满 ' + b2 + ' 个有效线圈。';
+    } else {
+      warn.hidden = true;
+      warn.textContent = '';
+    }
   }
 
   // --- tooltip ------------------------------------------------------------
