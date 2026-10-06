@@ -2,7 +2,7 @@
 
 NuclearCraft: Overhauled 涡轮机（Turbine）端面**线圈 / 电磁铁布局**自动优化工具。
 输入线圈平面边长 N 与轴承边长 B，工具会自动搜索使端面**导电率（Dynamo Efficiency）最大**的布局，
-并可导出为建筑小帮手模板、原版结构方块 `.nbt` 或命令 `.mcfunction`。
+并可导出为建筑小帮手模板或原版结构方块 `.nbt`。
 
 实现参考了本目录下的 [`FissionOpt/`](FissionOpt)（同样是纯前端工具）。本工具为**纯静态前端**，
 不需要编译或服务端，直接双击 `index.html` 即可使用。
@@ -74,12 +74,11 @@ NuclearCraft: Overhauled 涡轮机（Turbine）端面**线圈 / 电磁铁布局*
 | --- | --- | --- |
 | 建筑小帮手（Building Gadgets） | `.snbt` | 1.12.2 的模板以**剪贴板 NBT 文本**交互：点击「复制到剪贴板」，在游戏内模板管理器（Template Manager）点击 **Paste**。 |
 | 原版结构方块 | `.nbt` | 放入 `<存档>/generated/minecraft/structure/`，用结构方块加载。 |
-| 命令 | `.mcfunction` | 逐行 `/setblock`，可放入数据包 `functions` 或命令方块链执行。 |
 
 > 注意：Building Gadgets **1.12.2** 并不使用 `.json` 模板（那是 1.14+ 的格式），
 > 而是把 `NBTTagCompound.toString()` 的 SNBT 文本放进剪贴板，由 `JsonToNBT` 解析。
-> 因此这里导出的是与之完全兼容的 SNBT（可直接粘贴导入）。导出坐标原点仅影响 `.mcfunction`
-> 与建筑小帮手的 `startPos`；结构方块 `.nbt` 始终使用局部坐标。
+> 因此这里导出的是与之完全兼容的 SNBT（可直接粘贴导入）。导出坐标原点仅影响建筑小帮手的
+> `startPos`；结构方块 `.nbt` 始终使用局部坐标。
 
 方块对应关系：
 
@@ -132,7 +131,7 @@ js/rules.js         放置规则解析器
 js/texture.js       材质图集查找 / 图标辅助
 js/optimizer.js     势能贪心 + 大邻域搜索（LNS）优化器
 js/nbt.js           最小 NBT 编码器（含 gzip）
-js/export.js        mcfunction / SNBT / 结构 NBT 导出
+js/export.js        SNBT / 结构 NBT 导出
 js/main.js          界面逻辑
 assets/coil-atlas.png  合并后的材质图集
 tools/parse_coils.py   线圈数据生成脚本

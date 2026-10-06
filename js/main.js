@@ -501,12 +501,6 @@
     });
   }
 
-  function exportMcFunction() {
-    if (!state.result) return;
-    var mc = Emp.toMcFunction(state.N, state.opt.kind, state.result.labels, defs, { origin: origin(), fill: state.fill });
-    Emp.download('turbine_coils.mcfunction', mc, 'text/plain;charset=utf-8');
-  }
-
   // --- persistence --------------------------------------------------------
   // Remember the user's parameters in localStorage so they survive reloads.
   var STORE_KEY = 'turbineopt.settings.v1';
@@ -629,7 +623,6 @@
       if (text) Emp.download('turbine_coils.snbt', text, 'text/plain;charset=utf-8');
     });
     $('btn-nbt').addEventListener('click', exportNbt);
-    $('btn-mcfunction').addEventListener('click', exportMcFunction);
 
     window.addEventListener('resize', draw);
   }
