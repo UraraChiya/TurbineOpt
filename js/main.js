@@ -96,7 +96,7 @@
 
       var cb = document.createElement('input');
       cb.type = 'checkbox'; cb.checked = state.enabled[i];
-      cb.addEventListener('change', function () { state.enabled[i] = cb.checked; });
+      cb.addEventListener('change', function () { state.enabled[i] = cb.checked; saveSettings(); });
 
       var sw = document.createElement('span');
       sw.className = 'sw';
@@ -122,6 +122,7 @@
       if (state.limits[i] != null) mx.value = state.limits[i];
       mx.addEventListener('change', function () {
         state.limits[i] = (mx.value === '' ? null : Math.max(0, parseInt(mx.value, 10) || 0));
+        saveSettings();
       });
 
       // Hovering a row shows the coil's placement condition.
@@ -331,6 +332,7 @@
     state.opt = buildOptimizer();
     state.result = null;
     draw(); renderLegend();
+    saveSettings();
   }
 
   // --- run ----------------------------------------------------------------
@@ -486,8 +488,71 @@
     Emp.download('turbine_coils.mcfunction', mc, 'text/plain;charset=utf-8');
   }
 
+  // --- persistence --------------------------------------------------------
+  // Remember the user's parameters in localStorage so they survive reloads.
+  var STORE_KEY = 'turbineopt.settings.v1';
+
+  function loadSettings() {
+    try {
+      return JSON.parse(window.localStorage.getItem(STORE_KEY) || 'null');
+    } catch (e) { return null; }
+  }
+
+  function saveSettings() {
+    try {
+      var reserved = [];
+      state.reserved.forEach(function (k) { reserved.push(k); });
+      window.localStorage.setItem(STORE_KEY, JSON.stringify({
+        N: state.N, B: state.B,
+        reserveCount: state.reserveCount,
+        fill: state.fill,
+        enabled: state.enabled,
+        limits: state.limits,
+        origin: origin(),
+        reserved: reserved
+      }));
+    } catch (e) { /* storage unavailable (private mode / file://) */ }
+  }
+
+  function applySettings(s) {
+    if (!s) return;
+    if (typeof s.N === 'number') state.N = s.N;
+    if (typeof s.B === 'number') state.B = s.B;
+    if (typeof s.reserveCount === 'number') state.reserveCount = Math.max(0, s.reserveCount);
+    if (s.fill === 'glass' || s.fill === 'casing') state.fill = s.fill;
+    if (Array.isArray(s.enabled) && s.enabled.length === defs.length) {
+      state.enabled = s.enabled.map(Boolean);
+    }
+    if (Array.isArray(s.limits) && s.limits.length === defs.length) {
+      state.limits = s.limits.map(function (v) {
+        return (v == null || v === '') ? null : Math.max(0, parseInt(v, 10) || 0);
+      });
+    }
+    if (Array.isArray(s.origin) && s.origin.length === 3) {
+      ['ox', 'oy', 'oz'].forEach(function (id, k) { $(id).value = parseInt(s.origin[k], 10) || 0; });
+    }
+    // Restore pinned reserved cells, dropping any that fall outside the face
+    // or inside the bearing for the restored geometry.
+    if (Array.isArray(s.reserved)) {
+      state.reserved = new Set();
+      var lo = (state.N - state.B) >> 1;
+      s.reserved.forEach(function (k) {
+        var p = String(k).split(','), r = +p[0], c = +p[1];
+        if (!(r >= 0 && r < state.N && c >= 0 && c < state.N)) return;
+        if (r >= lo && r < lo + state.B && c >= lo && c < lo + state.B) return;
+        state.reserved.add(r + ',' + c);
+      });
+    }
+    // Reflect the restored values into the form controls.
+    $('in-n').value = state.N;
+    $('in-b').value = state.B;
+    $('in-reserve-count').value = state.reserveCount;
+    $('in-fill').value = state.fill;
+  }
+
   // --- init ---------------------------------------------------------------
   function init() {
+    applySettings(loadSettings());
     state.fill = ($('in-fill') && $('in-fill').value) === 'glass' ? 'glass' : 'casing';
     var rc = parseInt($('in-reserve-count').value, 10);
     state.reserveCount = Math.max(0, isNaN(rc) ? 2 : rc);
@@ -507,21 +572,22 @@
       var v = parseInt($('in-reserve-count').value, 10);
       state.reserveCount = Math.max(0, isNaN(v) ? 2 : v);
       state.opt = buildOptimizer(); state.result = null; draw(); renderLegend();
+      saveSettings();
     });
 
     $('coil-search').addEventListener('input', filterCoilList);
     $('btn-all-on').addEventListener('click', function () {
       for (var i = 0; i < defs.length; i++) state.enabled[i] = true;
-      buildCoilList();
+      buildCoilList(); saveSettings();
     });
     $('btn-all-off').addEventListener('click', function () {
       for (var i = 0; i < defs.length; i++) state.enabled[i] = false;
-      buildCoilList();
+      buildCoilList(); saveSettings();
     });
     $('btn-bases').addEventListener('click', function () {
       var bases = { magnesium: 1, beryllium: 1, aluminum: 1, gold: 1, copper: 1, silver: 1 };
       for (var i = 0; i < defs.length; i++) state.enabled[i] = !!bases[defs[i].id];
-      buildCoilList();
+      buildCoilList(); saveSettings();
     });
 
     var canvas = $('grid');
@@ -530,12 +596,12 @@
     canvas.addEventListener('click', onClick);
 
     ['ox', 'oy', 'oz'].forEach(function (id) {
-      $(id).addEventListener('change', function () { buildExports(); });
+      $(id).addEventListener('change', function () { buildExports(); saveSettings(); });
     });
 
     $('in-fill').addEventListener('change', function () {
       state.fill = $('in-fill').value === 'glass' ? 'glass' : 'casing';
-      draw(); renderLegend(); buildExports();
+      draw(); renderLegend(); buildExports(); saveSettings();
     });
 
     $('btn-snbt').addEventListener('click', copySnbt);
@@ -564,6 +630,7 @@
     state.result = null;
     draw(); renderLegend();
     $('results').hidden = true;
+    saveSettings();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
