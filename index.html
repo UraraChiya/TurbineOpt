@@ -33,6 +33,13 @@
 
     <p class="hint">预留格用于放置控制器与流体输入/输出口，会保持为空。默认由优化器自行选择位置；点击右侧网格可直接指定/取消固定预留格（指定后优先占用这些格子）。</p>
 
+    <label class="fill-row">剩余墙体填充：
+      <select id="in-fill">
+        <option value="casing">涡轮机外壳（casing）</option>
+        <option value="glass">涡轮机玻璃（glass）</option>
+      </select>
+    </label>
+
     <fieldset class="coils">
       <legend>可用线圈</legend>
       <div class="coil-toolbar">
@@ -90,12 +97,6 @@
     <input type="number" id="ox" value="0">
     <input type="number" id="oy" value="64">
     <input type="number" id="oz" value="0">
-  </label>
-  <label class="fill-row">剩余墙体填充：
-    <select id="in-fill">
-      <option value="casing">涡轮机外壳（casing）</option>
-      <option value="glass">涡轮机玻璃（glass）</option>
-    </select>
   </label>
   <textarea id="snbt-out" readonly spellcheck="false" placeholder="建筑小帮手模板（1.12.2：复制后在模板管理器点击 Paste）"></textarea>
   <p class="hint">
