@@ -420,7 +420,7 @@
       state.result = s.best;
       renderStats();
       var now = Date.now();
-      if (now - state.lastPaint > 150) { draw(); renderLegend(); state.lastPaint = now; }
+      if (now - state.lastPaint > 150) { draw(); renderLegend(); buildExports(); state.lastPaint = now; }
     }
     if (s.done) { finish(); return; }
     scheduleTick();
@@ -446,17 +446,20 @@
   }
 
   function buildExports() {
-    if (!state.result) { $('snbt-out').value = ''; return; }
+    if (!state.result) { $('snbt-out').value = ''; return ''; }
     var snbt = Emp.toBuildingGadgets(state.N, state.opt.kind, state.result.labels, defs, { origin: origin(), fill: state.fill });
     $('snbt-out').value = snbt;
+    return snbt;
   }
 
   function copySnbt() {
+    // Rebuild from the current best so the clipboard is never stale mid-run.
+    var text = buildExports();
     var ta = $('snbt-out');
-    if (!ta.value) return;
+    if (!text) return;
     var done = function () { flash($('btn-snbt'), '已复制 ✓'); };
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(ta.value).then(done, function () { fallbackCopy(ta); done(); });
+      navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(ta); done(); });
     } else { fallbackCopy(ta); done(); }
   }
   function fallbackCopy(ta) { ta.removeAttribute('readonly'); ta.select(); document.execCommand('copy'); ta.setAttribute('readonly', ''); }
@@ -537,7 +540,8 @@
 
     $('btn-snbt').addEventListener('click', copySnbt);
     $('btn-snbt-file').addEventListener('click', function () {
-      if (state.result) Emp.download('turbine_coils.snbt', $('snbt-out').value, 'text/plain;charset=utf-8');
+      var text = buildExports();
+      if (text) Emp.download('turbine_coils.snbt', text, 'text/plain;charset=utf-8');
     });
     $('btn-nbt').addEventListener('click', exportNbt);
     $('btn-mcfunction').addEventListener('click', exportMcFunction);
