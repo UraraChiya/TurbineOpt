@@ -3,51 +3,51 @@
 const COIL_DEFS = [
   {
     "id": "magnesium",
-    "name": "镁",
+    "name": "镁涡轮机发电机线圈",
     "cond": 0.88,
     "rule": "one bearing || one connector",
-    "nameEn": "Magnesium",
-    "nameZh": "镁"
+    "nameEn": "Magnesium Turbine Dynamo Coil",
+    "nameZh": "镁涡轮机发电机线圈"
   },
   {
     "id": "beryllium",
-    "name": "铍",
+    "name": "铍涡轮机发电机线圈",
     "cond": 0.9,
     "rule": "one magnesium coil",
-    "nameEn": "Beryllium",
-    "nameZh": "铍"
+    "nameEn": "Beryllium Turbine Dynamo Coil",
+    "nameZh": "铍涡轮机发电机线圈"
   },
   {
     "id": "aluminum",
-    "name": "铝",
+    "name": "铝涡轮机发电机线圈",
     "cond": 1.0,
     "rule": "two magnesium coils",
-    "nameEn": "Aluminum",
-    "nameZh": "铝"
+    "nameEn": "Aluminum Turbine Dynamo Coil",
+    "nameZh": "铝涡轮机发电机线圈"
   },
   {
     "id": "gold",
-    "name": "金",
+    "name": "金涡轮机发电机线圈",
     "cond": 1.04,
     "rule": "one aluminum coil",
-    "nameEn": "Gold",
-    "nameZh": "金"
+    "nameEn": "Gold Turbine Dynamo Coil",
+    "nameZh": "金涡轮机发电机线圈"
   },
   {
     "id": "copper",
-    "name": "铜",
+    "name": "铜涡轮机发电机线圈",
     "cond": 1.06,
     "rule": "one beryllium coil",
-    "nameEn": "Copper",
-    "nameZh": "铜"
+    "nameEn": "Copper Turbine Dynamo Coil",
+    "nameZh": "铜涡轮机发电机线圈"
   },
   {
     "id": "silver",
-    "name": "银",
+    "name": "银涡轮机发电机线圈",
     "cond": 1.12,
     "rule": "one gold coil && one copper coil",
-    "nameEn": "Silver",
-    "nameZh": "银"
+    "nameEn": "Silver Turbine Dynamo Coil",
+    "nameZh": "银涡轮机发电机线圈"
   },
   {
     "id": "ironmagnet",

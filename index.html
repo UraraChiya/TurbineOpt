@@ -26,15 +26,12 @@
     </div>
 
     <div class="row">
-      <label>优化时间（秒）
-        <input type="number" id="in-time" value="3" min="0.5" max="60" step="0.5">
-      </label>
       <label>每面预留格数
         <input type="number" id="in-reserve-count" value="2" min="0" max="8" step="1">
       </label>
     </div>
 
-    <p class="hint">预留格用于放置控制器与流体输入/输出口，会保持为空。点击右侧网格可直接设置/取消预留格。</p>
+    <p class="hint">预留格用于放置控制器与流体输入/输出口，会保持为空。默认由优化器自行选择位置；点击右侧网格可直接指定/取消固定预留格（指定后优先占用这些格子）。</p>
 
     <fieldset class="coils">
       <legend>可用线圈</legend>
@@ -50,6 +47,7 @@
 
     <div class="row actions">
       <button id="btn-run" class="primary">开始优化</button>
+      <button id="btn-pause" disabled>暂停</button>
       <button id="btn-stop" disabled>停止</button>
     </div>
     <div class="progress" id="progress-wrap" hidden>

@@ -14,13 +14,10 @@
   var defById = {};
   for (var di = 0; di < defs.length; di++) defById[defs[di].id] = defs[di];
 
-  // Display name for a coil id (base coils get a "线圈" suffix since their
-  // lang name is only the element, e.g. 镁 -> 镁线圈).
+  // Display name for a coil (now taken directly from the mod lang files).
   function coilName(d) {
     if (!d) return '';
-    var n = d.nameZh || d.nameEn || d.id;
-    if (Emp.BASE_META[d.id] != null) n += '线圈';
-    return n;
+    return d.nameZh || d.nameEn || d.id;
   }
 
   // Human-readable placement condition, e.g. "至少 1 个镁线圈".
@@ -45,7 +42,7 @@
   var state = {
     N: 11, B: 3,
     reserved: new Set(),
-    reserveAuto: true,
+    reserveCount: 2,
     enabled: [],
     limits: [],
     fill: 'casing',
@@ -53,6 +50,9 @@
     session: null,
     result: null,
     running: false,
+    paused: false,
+    startedAt: 0,
+    lastPaint: 0,
     timer: null
   };
   for (var i = 0; i < defs.length; i++) { state.enabled.push(true); state.limits.push(null); }
@@ -63,22 +63,6 @@
   }); }
 
   // --- geometry -----------------------------------------------------------
-  function autoReserve() {
-    var N = state.N, B = state.B;
-    var count = Math.max(0, parseInt($('in-reserve-count').value || '2', 10) || 0);
-    var lo = (N - B) >> 1, cells = [];
-    for (var r = 0; r < N; r++) {
-      for (var c = 0; c < N; c++) {
-        if (r >= lo && r < lo + B && c >= lo && c < lo + B) continue;
-        cells.push({ r: r, c: c, e: Math.min(r, c, N - 1 - r, N - 1 - c), k: r + c });
-      }
-    }
-    cells.sort(function (a, b) { return a.e - b.e || a.k - b.k; });
-    state.reserved = new Set();
-    for (var i = 0; i < count && i < cells.length; i++) state.reserved.add(cells[i].r + ',' + cells[i].c);
-    state.reserveAuto = true;
-  }
-
   function collectMaxCounts() {
     var out = new Array(defs.length);
     for (var i = 0; i < defs.length; i++) {
@@ -95,15 +79,9 @@
       reserved.push([parseInt(p[0], 10), parseInt(p[1], 10)]);
     });
     return new Opt.TurbineOptimizer(state.N, state.B, {
-      defs: defs, connectorRule: connDef.rule, reserved: reserved, maxCounts: collectMaxCounts()
+      defs: defs, connectorRule: connDef.rule, reserved: reserved,
+      reserveCount: state.reserveCount, maxCounts: collectMaxCounts()
     });
-  }
-
-  function refreshModel(clearResult) {
-    if (clearResult) state.result = null;
-    state.opt = buildOptimizer();
-    draw();
-    renderLegend();
   }
 
   // --- coil list ----------------------------------------------------------
@@ -195,7 +173,7 @@
         var lab = labels ? labels[i] : EMPTY;
         var col, text, tcol = '#0b0f14';
         if (opt.kind[i] === BEARING) { col = '#39414f'; text = '轴'; tcol = '#c7d2e0'; }
-        else if (opt.kind[i] === RESERVED) { col = '#ffd166'; text = '预'; }
+        else if (opt.kind[i] === RESERVED || lab === RESERVED) { col = '#ffd166'; text = '预'; }
         else if (lab >= 0) {
           var d = defs[lab]; col = Colors.color(d); text = Colors.label(d); tcol = Colors.textColor(col);
         }
@@ -229,7 +207,7 @@
     for (var i = 0; i < state.opt.kind.length; i++) {
       var k = state.opt.kind[i], lab = labels ? labels[i] : EMPTY;
       if (k === BEARING) bear++;
-      else if (k === RESERVED) resv++;
+      else if (k === RESERVED || lab === RESERVED) resv++;
       else if (lab >= 0) counts[lab] = (counts[lab] || 0) + 1;
       else if (lab === CONNECTOR) conn++;
       else wall++;
@@ -298,7 +276,7 @@
     var lab = labels ? labels[i] : EMPTY;
     var name, lines = [];
     if (kind === BEARING) { name = '轴承'; lines.push('转子轴承'); }
-    else if (kind === RESERVED) { name = '预留位置'; lines.push('控制器 / 输入输出口'); }
+    else if (kind === RESERVED || lab === RESERVED) { name = '预留位置'; lines.push('控制器 / 输入输出口'); }
     else if (lab >= 0) {
       var d = defs[lab];
       name = coilName(d);
@@ -329,7 +307,6 @@
     var key = r + ',' + c;
     if (state.reserved.has(key)) state.reserved.delete(key);
     else state.reserved.add(key);
-    state.reserveAuto = false;
     state.opt = buildOptimizer();
     state.result = null;
     draw(); renderLegend();
@@ -354,46 +331,83 @@
   function setRunning(on) {
     state.running = on;
     $('btn-run').disabled = on;
+    $('btn-run').textContent = on ? '运行中…' : '开始优化';
+    $('btn-pause').disabled = !on;
     $('btn-stop').disabled = !on;
   }
 
+  function setPaused(p) {
+    state.paused = p;
+    $('btn-pause').textContent = p ? '继续' : '暂停';
+    var bar = $('progress-bar').parentElement;
+    if (bar) bar.classList[p ? 'remove' : 'add']('active');
+  }
+
+  function scheduleTick() { state.timer = setTimeout(tick, 0); }
+
   function start() {
+    if (state.running) { resume(); return; }
     var err = validate();
     if (err) { showError(err); return; }
     showError('');
-    if (state.reserveAuto) autoReserve();
     state.result = null;
     state.opt = buildOptimizer();
-    var totalMs = Math.max(250, Math.round((parseFloat($('in-time').value) || 3) * 1000));
-    state.session = state.opt.createSession({ totalMs: totalMs, seedRuns: 24 });
+    // Continuous optimisation: runs until the user presses Stop.
+    state.session = state.opt.createSession({ infinite: true });
+    state.startedAt = Date.now();
+    state.lastPaint = 0;
     setRunning(true);
+    setPaused(false);
     $('progress-wrap').hidden = false;
-    $('results').hidden = true;
-    var t0 = Date.now();
-
-    function tick() {
-      if (!state.running) return;
-      var s = state.session;
-      state.opt.stepSession(s, 30);
-      var frac = Math.min(1, (Date.now() - t0) / totalMs);
-      $('progress-bar').style.width = (frac * 100).toFixed(1) + '%';
-      $('progress-text').textContent = Math.round(frac * 100) + '% · ' + (s.best ? s.best.eff.toFixed(1) : '0');
-      if (s.best) { state.result = s.best; draw(); renderLegend(); }
-      if (s.done) { finish(); return; }
-      state.timer = setTimeout(tick, 0);
-    }
+    $('results').hidden = false;
+    renderStats();
     tick();
+  }
+
+  function pause() {
+    if (!state.running || state.paused) return;
+    setPaused(true);
+    clearTimeout(state.timer);
+  }
+
+  function resume() {
+    if (!state.running || !state.paused) return;
+    setPaused(false);
+    scheduleTick();
+  }
+
+  function togglePause() {
+    if (state.paused) resume(); else pause();
   }
 
   function stop() {
     if (!state.running) return;
     state.running = false;
+    state.paused = false;
     clearTimeout(state.timer);
     finish();
   }
 
+  function tick() {
+    if (!state.running || state.paused) return;
+    var s = state.session;
+    state.opt.stepSession(s, 30);
+    var secs = ((Date.now() - state.startedAt) / 1000).toFixed(0);
+    $('progress-bar').style.width = '100%';
+    $('progress-text').textContent = '已运行 ' + secs + ' s · 当前最优 ' + (s.best ? s.best.eff.toFixed(3) : '—');
+    if (s.best) {
+      state.result = s.best;
+      renderStats();
+      var now = Date.now();
+      if (now - state.lastPaint > 150) { draw(); renderLegend(); state.lastPaint = now; }
+    }
+    if (s.done) { finish(); return; }
+    scheduleTick();
+  }
+
   function finish() {
     setRunning(false);
+    setPaused(false);
     $('progress-wrap').hidden = true;
     var s = state.session;
     if (!s || !s.best) { showError('未找到可行布局，请检查参数或可用线圈。'); return; }
@@ -451,18 +465,21 @@
   // --- init ---------------------------------------------------------------
   function init() {
     state.fill = ($('in-fill') && $('in-fill').value) === 'glass' ? 'glass' : 'casing';
+    var rc = parseInt($('in-reserve-count').value, 10);
+    state.reserveCount = Math.max(0, isNaN(rc) ? 2 : rc);
     buildCoilList();
-    autoReserve();
     state.opt = buildOptimizer();
     draw(); renderLegend();
 
     $('btn-run').addEventListener('click', start);
+    $('btn-pause').addEventListener('click', togglePause);
     $('btn-stop').addEventListener('click', stop);
 
     $('in-n').addEventListener('change', function () { onGeometry(); });
     $('in-b').addEventListener('change', function () { onGeometry(); });
     $('in-reserve-count').addEventListener('change', function () {
-      state.reserveAuto = true; autoReserve();
+      var v = parseInt($('in-reserve-count').value, 10);
+      state.reserveCount = Math.max(0, isNaN(v) ? 2 : v);
       state.opt = buildOptimizer(); state.result = null; draw(); renderLegend();
     });
 
@@ -509,15 +526,13 @@
     var err = validate();
     if (err) { showError(err); return; }
     showError('');
-    if (state.reserveAuto) autoReserve(); else {
-      // drop reserved cells that are now inside the bearing
-      var lo = (state.N - state.B) >> 1, keep = new Set();
-      state.reserved.forEach(function (k) {
-        var p = k.split(','), r = +p[0], c = +p[1];
-        if (!(r >= lo && r < lo + state.B && c >= lo && c < lo + state.B)) keep.add(k);
-      });
-      state.reserved = keep;
-    }
+    // drop pinned reserved cells that are now inside the bearing
+    var lo = (state.N - state.B) >> 1, keep = new Set();
+    state.reserved.forEach(function (k) {
+      var p = k.split(','), r = +p[0], c = +p[1];
+      if (!(r >= lo && r < lo + state.B && c >= lo && c < lo + state.B)) keep.add(k);
+    });
+    state.reserved = keep;
     state.opt = buildOptimizer();
     state.result = null;
     draw(); renderLegend();

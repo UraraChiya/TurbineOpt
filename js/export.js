@@ -53,7 +53,7 @@
         var pos = [origin[0] + c, origin[1] + r, origin[2]];
         var block, slotKind;
         if (k === BEARING) { block = bearingBlock(); slotKind = 'bearing'; }
-        else if (k === RESERVED) { block = airBlock(); slotKind = 'air'; }
+        else if (k === RESERVED || lab === RESERVED) { block = airBlock(); slotKind = 'air'; }
         else if (lab >= 0) { block = coilBlock(defs[lab]); slotKind = 'coil'; }
         else if (lab === CONNECTOR) { block = connectorBlock(); slotKind = 'connector'; }
         else { block = wall; slotKind = fill === 'glass' ? 'glass' : 'casing'; }

@@ -6,9 +6,11 @@ Base NuclearCraft coils + connector are hard-coded from the jar defaults
 (NCConfig).  The NTP addon coils are parsed from scripts/NTP/*.zs so they
 stay in sync with the pack.
 """
+import glob
 import json
 import os
 import re
+import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS = os.path.join(ROOT, "scripts", "NTP")
@@ -39,6 +41,38 @@ def load_lang(fname):
 
 LANG_EN = load_lang("en_us.lang")
 LANG_ZH = load_lang("zh_cn.lang")
+
+
+def load_jar_lang(member):
+    """Extract coil display names from the NuclearCraft mod jar's lang file.
+
+    Handles both the built-in form
+    ``tile.nuclearcraft.turbine_dynamo_coil.<id>.name`` and the add-on form
+    ``tile.nuclearcraft.turbine_dynamo_coil_<id>.name``.
+    """
+    names = {}
+    jars = sorted(glob.glob(os.path.join(ROOT, "nuclearcraft-*.jar")))
+    if not jars:
+        return names
+    try:
+        with zipfile.ZipFile(jars[0]) as zf:
+            data = zf.read("assets/nuclearcraft/lang/" + member).decode("utf-8")
+    except (KeyError, OSError):
+        return names
+    for line in data.splitlines():
+        m = re.match(
+            r"tile\.nuclearcraft\.turbine_dynamo_coil[._]([a-z0-9_]+)\.name=(.*)$",
+            line.strip(),
+        )
+        if m:
+            names[m.group(1)] = m.group(2).strip()
+    return names
+
+
+JAR_EN = load_jar_lang("en_us.lang")
+JAR_ZH = load_jar_lang("zh_cn.lang")
+if not JAR_EN:
+    print("WARNING: no nuclearcraft-*.jar found; base coil names fall back to defaults")
 
 # --- Base NuclearCraft: Overhauled coils (NCConfig defaults) ---------------
 BASE_NAMES = {
@@ -123,14 +157,13 @@ for c in coils:
     seen[c["id"]] = c
 coils = list(seen.values())
 
-# attach localised display names from the provided lang files
+# attach localised display names: modpack/NTP lang first, then the NuclearCraft
+# jar lang, then the name embedded in the .zs script, then built-in fallbacks
 for c in coils:
     cid = c["id"]
-    if cid in BASE_NAMES:
-        c["nameEn"], c["nameZh"] = BASE_NAMES[cid]
-    else:
-        c["nameEn"] = LANG_EN.get(cid, c["name"])
-        c["nameZh"] = LANG_ZH.get(cid, c["nameEn"])
+    fallback = BASE_NAMES.get(cid)
+    c["nameEn"] = LANG_EN.get(cid) or JAR_EN.get(cid) or (fallback[0] if fallback else c["name"])
+    c["nameZh"] = LANG_ZH.get(cid) or JAR_ZH.get(cid) or (fallback[1] if fallback else c["nameEn"])
     c["name"] = c["nameZh"] or c["nameEn"]
 
 # validate that every rule dependency resolves to a known coil / known object
@@ -142,13 +175,13 @@ def check_rule(rule):
         part = part.strip().lower()
         if "coil" not in part:
             continue
-        # token before 'coil' is the type (or 'any')
+        # token before the "coil"/"coils" word is the type (or 'any')
         tok = part.replace("at least", " ").replace("exactly", " ").replace("at most", " ")
         toks = tok.split()
-        if "coil" not in toks:
+        ci = next((j for j, w in enumerate(toks) if "coil" in w), -1)
+        if ci < 0:
             continue
-        i = toks.index("coil")
-        t = toks[i - 1] if i > 0 else "any"
+        t = toks[ci - 1] if ci > 0 else "any"
         if t != "any" and t not in ids:
             missing.add(t)
 

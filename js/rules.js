@@ -57,12 +57,17 @@
       if (/\bbearing\b/.test(p)) target = { kind: 'bearing' };
       else if (/\bconnector\b/.test(p)) target = { kind: 'connector' };
       else if (/\bcasing\b|\bwall\b/.test(p)) target = { kind: 'casing' };
-      else if (/\bcoil\b/.test(p)) {
-        var words = p.split(' ').filter(function (w) {
-          return w !== 'coil' && w !== 'of' && w !== 'any' && w !== 'a' && w !== 'an';
-        });
-        if (words.length === 0) target = { kind: 'any' };
-        else target = { kind: 'coil', type: words[words.length - 1] };
+      else if (p.indexOf('coil') !== -1) {
+        // Mirror NC's DefaultRuleParser: the coil type is the token directly
+        // before the "coil"/"coils" word (e.g. "two magnesium coils" ->
+        // magnesium, "one of any coil" -> any).
+        var ctoks = p.split(' ');
+        var ci = -1;
+        for (var w = 0; w < ctoks.length; w++) {
+          if (ctoks[w].indexOf('coil') !== -1) { ci = w; break; }
+        }
+        var ty = ci > 0 ? ctoks[ci - 1] : 'any';
+        target = (!ty || ty === 'any') ? { kind: 'any' } : { kind: 'coil', type: ty };
       } else {
         target = { kind: 'any' };
       }

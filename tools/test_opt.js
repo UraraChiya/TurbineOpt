@@ -12,8 +12,8 @@ const opt = new TurbineOptimizer(N, B, {
 });
 
 const t0 = Date.now();
-const res = opt.optimize({ deadline: Date.now() + ms, seedRuns: 40 });
-console.log('N=' + N, 'B=' + B, 'time=' + (Date.now() - t0) + 'ms');
+const res = opt.optimize({ deadline: Date.now() + ms });
+console.log('N=' + N, 'B=' + B, 'time=' + (Date.now() - t0) + 'ms', 'iters=' + res.iterations);
 console.log('eff=' + res.eff.toFixed(6), 'M=' + res.M, 'S=' + res.S.toFixed(4), 'denom=' + Math.max(B * B, res.M));
 
 // print grid

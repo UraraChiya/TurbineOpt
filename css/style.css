@@ -142,6 +142,13 @@ fieldset.coils legend { color: var(--muted); font-size: 12px; padding: 0 6px; }
 .progress { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
 .progress .bar { flex: 1; height: 8px; background: var(--panel-2); border-radius: 4px; overflow: hidden; }
 .progress .bar > div { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .1s linear; }
+.progress .bar.active > div {
+  width: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2), var(--accent));
+  background-size: 200% 100%;
+  animation: barflow 1.4s linear infinite;
+}
+@keyframes barflow { from { background-position: 0 0; } to { background-position: -200% 0; } }
 .progress span { color: var(--muted); font-size: 12px; min-width: 66px; }
 
 .canvas-wrap { position: relative; display: flex; justify-content: center; }

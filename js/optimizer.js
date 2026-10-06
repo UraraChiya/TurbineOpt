@@ -83,8 +83,29 @@
       }
     }
 
+    // Reserved (air) slots for the controller / fluid ports.  Fixed pins are
+    // already marked RESERVED in `kind`; `reserveCount` is the total required
+    // per face, so the optimiser must leave `extraReserve` further free cells
+    // empty and may choose their positions itself.
+    var fixedReserved = 0;
+    for (i = 0; i < N2; i++) if (this.kind[i] === RESERVED) fixedReserved++;
+    this.fixedReserved = fixedReserved;
+    this.reserveCount = opts.reserveCount != null ? opts.reserveCount : fixedReserved;
+    this.extraReserve = Math.max(0, this.reserveCount - fixedReserved);
+    this.maxPlaced = this.free.length - this.extraReserve;
+
     this.order = this.computeOrder();
     this.pot = this.computePotential();
+    // LNS parameters: fraction of the incumbent's coils destroyed each
+    // iteration, tie-breaking noise during reconstruction, and how much worse
+    // a new incumbent may be before it is rejected (record-to-record travel).
+    // The window widens with the bearing: a large bearing leaves a big empty
+    // "free lunch" plateau (denominator B^2) that is costly to descend into,
+    // so regressions there must be tolerated or the search freezes at its seed.
+    this.removeFrac = opts.removeFrac != null ? opts.removeFrac : 0.08;
+    this.regrowBias = opts.regrowBias != null ? opts.regrowBias : 0.5;
+    var defDelta = Math.min(0.25, 0.05 + 0.6 * (B * B) / this.free.length);
+    this.recordDelta = opts.recordDelta != null ? opts.recordDelta : defDelta;
 
     this.labels = new Int16Array(N2);
     this.validScratch = new Uint8Array(N2);
@@ -220,6 +241,23 @@
     return counts;
   };
 
+  // Mark exactly `extraReserve` still-empty free cells as RESERVED (air) so the
+  // controller / fluid ports have a home.  Marking does not change the score:
+  // RESERVED is treated like EMPTY by evaluate().
+  TurbineOptimizer.prototype.markReserves = function (labels) {
+    var need = this.extraReserve;
+    if (!need) return labels;
+    var have = 0, k, i;
+    for (k = 0; k < this.free.length; k++) {
+      if (labels[this.free[k]] === RESERVED) have++;
+    }
+    for (k = 0; k < this.order.length && have < need; k++) {
+      i = this.order[k];
+      if (labels[i] === EMPTY) { labels[i] = RESERVED; have++; }
+    }
+    return labels;
+  };
+
   // --- greedy growth ------------------------------------------------------
   // Repeatedly place the dynamo part with the highest forward "potential"
   // (breaking ties by conductivity).  This drives construction towards the
@@ -230,7 +268,14 @@
     var counts = new Int32Array(defs.length);
     var maxCounts = this.maxCounts;
     bias = bias || 0;
+    var placed = 0;
+    var b2 = this.B * this.B, M = 0, S = 0;
+    // Best-eff snapshot seen while building: the whole filled plane has a much
+    // worse average than the small high-conductivity cluster encountered on the
+    // way, so this is the incumbent the LNS should start from.
+    var bestEff = 0, bestLabels = labels.slice(), bestM = 0, bestS = 0;
     for (;;) {
+      if (placed >= this.maxPlaced) break;
       var bestI = -1, bestType = EMPTY, bestScore = -Infinity;
       for (var fi = 0; fi < this.free.length; fi++) {
         var i = this.free[fi];
@@ -254,97 +299,11 @@
       labels[bestI] = bestType;
       valid[bestI] = 1;
       counts[bestType]++;
+      placed++; M++; S += defs[bestType].cond;
+      var e = S / Math.max(b2, M);
+      if (e > bestEff + 1e-12) { bestEff = e; bestLabels = labels.slice(); bestM = M; bestS = S; }
     }
-    return valid;
-  };
-
-  // --- local search -------------------------------------------------------
-  // Simulated annealing over single-cell assignments, evaluated with the full
-  // game semantics.  The greedy growth result is used as the initial state.
-  TurbineOptimizer.prototype.anneal = function (labels, opts) {
-    opts = opts || {};
-    var deadline = opts.deadline || Date.now() + 2000;
-    var eff = this.evaluate(labels, 0);
-    var valid = new Uint8Array(this._valid);
-    var M = this._M, S = this._S;
-    var bestLabels = labels.slice();
-    var bestEff = eff, bestM = M, bestS = S;
-    var bestValid = new Uint8Array(valid);
-    var counts = this.currentCounts(labels, valid);
-    var free = this.free, nfree = free.length;
-    var defs = this.defs, ntypes = defs.length;
-    var temp = opts.temp || (0.25 * Math.max(bestEff, 1e-3));
-    var cooling = opts.cooling || 0.9995;
-    var itersPerCheck = 64, iterations = 0;
-
-    // Candidate moves: random cell + random value, and "extend a prerequisite
-    // of a neighbouring target" moves that help build chains.
-    while (Date.now() < deadline) {
-      for (var step = 0; step < itersPerCheck; step++) {
-        iterations++;
-        var i = free[(Math.random() * nfree) | 0];
-        var old = labels[i];
-        var nv;
-        var roll = Math.random();
-        if (roll < 0.35) {
-          nv = EMPTY;
-        } else if (roll < 0.75) {
-          nv = (Math.random() * ntypes) | 0;
-        } else if (roll < 0.9) {
-          nv = CONNECTOR;
-        } else {
-          // place a prerequisite of a rule that wants something next door
-          nv = this.suggestValue(i);
-          if (nv == null) nv = (Math.random() * ntypes) | 0;
-        }
-        if (nv === old) continue;
-        if (nv >= 0 && this.maxCounts && this.maxCounts[nv] != null &&
-            nv !== old && counts[nv] >= this.maxCounts[nv]) continue;
-        labels[i] = nv;
-        var e = this.evaluate(labels, 5, this.validScratch);
-        var d = e - eff;
-        if (d >= 0 || Math.random() < Math.exp(d / temp)) {
-          if (old >= 0) counts[old]--;
-          if (nv >= 0) counts[nv]++;
-          eff = e;
-          valid.set(this.validScratch);
-          M = this._M; S = this._S;
-          if (eff > bestEff) {
-            // confirm with a fully converged evaluation
-            var full = this.evaluate(labels, 0);
-            bestEff = full; bestM = this._M; bestS = this._S;
-            bestLabels = labels.slice();
-            bestValid.set(this._valid);
-          }
-        } else {
-          labels[i] = old;
-        }
-      }
-      temp *= cooling;
-      if (temp < 1e-6) temp = 1e-6;
-    }
-    return { labels: bestLabels, valid: bestValid, M: bestM, S: bestS, eff: bestEff, iterations: iterations };
-  };
-
-  // Suggest a type that would satisfy an adjacent coil's unmet prerequisite.
-  TurbineOptimizer.prototype.suggestValue = function (i) {
-    var nb = this.nbr[i];
-    var cands = [];
-    for (var k = 0; k < nb.length; k++) {
-      var lab = this.labels[nb[k]];
-      if (lab < 0) continue;
-      var terms = this.rules[lab].terms;
-      for (var t = 0; t < terms.length; t++) {
-        var tg = terms[t].target;
-        if (tg.kind === 'coil') {
-          var ti = this.idx[tg.type];
-          if (ti != null) cands.push(ti);
-        } else if (tg.kind === 'connector') cands.push(CONNECTOR);
-        else if (tg.kind === 'bearing') { /* bearing is static */ }
-      }
-    }
-    if (!cands.length) return null;
-    return cands[(Math.random() * cands.length) | 0];
+    return { valid: valid, best: { labels: bestLabels, eff: bestEff, M: bestM, S: bestS } };
   };
 
   // Remove dynamo parts that are not part of the valid network.  This is
@@ -357,37 +316,119 @@
     }
   };
 
+  // --- large-neighbourhood search -----------------------------------------
+  // The optimum is normally a *small* dense cluster of high-conductivity
+  // coils, while the potential-guided greedy fills the whole plane with a
+  // mediocre average.  Single-cell annealing cannot cross that valley, so the
+  // main search is ruin-and-recreate: repeatedly delete a random slice of the
+  // incumbent's coils and greedily rebuild a valid layout, keeping the best.
+
+  // Potential-guided greedy seed.  We keep the best-eff snapshot along the
+  // build (a small, strong cluster) rather than the fully-filled plane, then
+  // prune and mark reserves.  This is the initial incumbent for the LNS.
+  TurbineOptimizer.prototype.initialSeed = function () {
+    var labels = new Int16Array(this.N2);
+    labels.fill(EMPTY);
+    this.labels = labels;
+    var bl = this.grow(labels, null, 0).best.labels;
+    this.evaluate(bl, 0);
+    this.prune(bl, this._valid);
+    this.markReserves(bl);
+    var eff = this.evaluate(bl, 0);
+    return { labels: bl, valid: new Uint8Array(this._valid), M: this._M, S: this._S, eff: eff };
+  };
+
+  // Greedily fill the EMPTY cells of `labels` (which may already hold a partial
+  // layout) in potential order, returning the best-eff snapshot along the way.
+  // RESERVED cells are left empty.
+  TurbineOptimizer.prototype.regrow = function (labels) {
+    var defs = this.defs, valid = this.validScratch;
+    this.evaluate(labels, 0, valid);
+    var M = this._M, S = this._S, b2 = this.B * this.B;
+    var bestEff = M > 0 ? S / Math.max(b2, M) : 0;
+    var bestLabels = labels.slice(), bestM = M, bestS = S;
+    var counts = this.currentCounts(labels, valid);
+    for (;;) {
+      var bestI = -1, bestType = EMPTY, bestScore = -Infinity;
+      for (var fi = 0; fi < this.free.length; fi++) {
+        var i = this.free[fi];
+        if (labels[i] !== EMPTY) continue;
+        var nb = this.nbr[i], adj = false;
+        for (var k = 0; k < nb.length; k++) {
+          if (this.kind[nb[k]] === BEARING || valid[nb[k]]) { adj = true; break; }
+        }
+        if (!adj) continue;
+        for (var t = 0; t < defs.length; t++) {
+          if (this.maxCounts && this.maxCounts[t] != null && counts[t] >= this.maxCounts[t]) continue;
+          labels[i] = t;
+          var ok = this.ruleOK(i, valid, labels);
+          labels[i] = EMPTY;
+          if (!ok) continue;
+          var score = this.pot[t] + defs[t].cond * 1e-4 + Math.random() * this.regrowBias;
+          if (score > bestScore) { bestScore = score; bestI = i; bestType = t; }
+        }
+      }
+      if (bestI < 0) break;
+      labels[bestI] = bestType; valid[bestI] = 1; counts[bestType]++; M++; S += defs[bestType].cond;
+      var e = S / Math.max(b2, M);
+      if (e > bestEff + 1e-12) { bestEff = e; bestLabels = labels.slice(); bestM = M; bestS = S; }
+    }
+    return { labels: bestLabels, eff: bestEff, M: bestM, S: bestS };
+  };
+
+  // One ruin-and-recreate step around an incumbent layout.
+  TurbineOptimizer.prototype.lnsStep = function (base) {
+    var w = base.labels.slice(), i;
+    var cells = [];
+    for (i = 0; i < this.N2; i++) {
+      if (this.kind[i] !== BEARING && w[i] >= 0) cells.push(i);
+    }
+    if (cells.length) {
+      var k = Math.max(1, Math.round(cells.length * this.removeFrac));
+      for (var q = 0; q < k; q++) {
+        var p = (Math.random() * cells.length) | 0;
+        w[cells[p]] = EMPTY;
+      }
+    }
+    // coils that lost their prerequisites in the ruin are dropped as well
+    this.evaluate(w, 0);
+    for (i = 0; i < this.N2; i++) {
+      if (this.kind[i] !== BEARING && w[i] >= 0 && !this._valid[i]) w[i] = EMPTY;
+    }
+    return this.regrow(w);
+  };
+
+  // Finalise a candidate (prune + reserves + full evaluation) so it can be
+  // compared or exported.
+  TurbineOptimizer.prototype.finalizeLNS = function (cand) {
+    var labels = cand.labels;
+    this.evaluate(labels, 0);
+    this.prune(labels, this._valid);
+    this.markReserves(labels);
+    var eff = this.evaluate(labels, 0);
+    return { labels: labels, valid: new Uint8Array(this._valid), M: this._M, S: this._S, eff: eff };
+  };
+
   // --- top-level optimiser ------------------------------------------------
   TurbineOptimizer.prototype.optimize = function (opts) {
     opts = opts || {};
-    var seedRuns = opts.seedRuns || 24;
-    var rng = opts.rng || Math.random;
+    if (opts.removeFrac != null) this.removeFrac = opts.removeFrac;
     var deadline = opts.deadline || (Date.now() + 3000);
-    var best = null;
-
-    // Phase 1: several randomised greedy growths.
-    for (var s = 0; s < seedRuns; s++) {
-      var labels = new Int16Array(this.N2);
-      labels.fill(EMPTY);
-      this.labels = labels;
-      var valid = this.grow(labels, rng, opts.bias != null ? opts.bias : 0);
-      this.evaluate(labels, 0);
-      this.prune(labels, this._valid);
-      var e = this.evaluate(labels, 0);
-      if (!best || e > best.eff + 1e-12 || (Math.abs(e - best.eff) < 1e-12 && this._M < best.M)) {
-        best = { labels: labels.slice(), valid: new Uint8Array(this._valid), M: this._M, S: this._S, eff: e };
-      }
-      if (Date.now() > deadline) break;
+    var bestEver = this.initialSeed();
+    var cur = bestEver;
+    var iterations = 0;
+    while (Date.now() < deadline) {
+      var fe = this.finalizeLNS(this.lnsStep(cur));
+      iterations++;
+      // record-to-record travel: accept small regressions to drift between
+      // basins, but always remember the true best.
+      if (fe.eff >= cur.eff * (1 - this.recordDelta)) cur = fe;
+      if (fe.eff > bestEver.eff + 1e-12) bestEver = fe;
     }
-
-    // Phase 2: simulated annealing from the best seed.
-    var work = best.labels.slice();
-    this.labels = work;
-    var res = this.anneal(work, { deadline: deadline, temp: opts.temp, cooling: opts.cooling });
-    if (res.eff > best.eff + 1e-12) {
-      best = { labels: res.labels, valid: res.valid, M: res.M, S: res.S, eff: res.eff };
-    }
-    return best;
+    return {
+      labels: bestEver.labels, valid: bestEver.valid, M: bestEver.M, S: bestEver.S,
+      eff: bestEver.eff, iterations: iterations
+    };
   };
 
   // --- time-sliced session ------------------------------------------------
@@ -396,23 +437,19 @@
   // work.
   TurbineOptimizer.prototype.createSession = function (opts) {
     opts = opts || {};
-    var totalMs = opts.totalMs || 3000;
+    if (opts.removeFrac != null) this.removeFrac = opts.removeFrac;
+    var totalMs = opts.infinite ? Infinity : (opts.totalMs || 3000);
     var now = Date.now();
     return {
       opt: this,
       options: opts,
-      seedRuns: opts.seedRuns || 24,
       totalMs: totalMs,
       deadline: now + totalMs,
       start: now,
       phase: 'seed',
-      seedIdx: 0,
-      cooling: opts.cooling || 0.9995,
       best: null,
-      work: null,
-      valid: null,
       validOut: null,
-      eff: 0, M: 0, S: 0, temp: 0,
+      eff: 0, M: 0, S: 0,
       iterations: 0,
       done: false
     };
@@ -423,83 +460,25 @@
     var end = Date.now() + (budgetMs || 30);
 
     if (s.phase === 'seed') {
-      while (s.seedIdx < s.seedRuns && Date.now() < end) {
-        var labels = new Int16Array(this.N2);
-        labels.fill(EMPTY);
-        this.labels = labels;
-        this.grow(labels, Math.random, 0);
-        this.evaluate(labels, 0);
-        this.prune(labels, this._valid);
-        var e = this.evaluate(labels, 0);
-        if (!s.best || e > s.best.eff + 1e-12 ||
-            (Math.abs(e - s.best.eff) < 1e-12 && this._M < s.best.M)) {
-          s.best = {
-            labels: labels.slice(), valid: new Uint8Array(this._valid),
-            M: this._M, S: this._S, eff: e
-          };
-        }
-        s.seedIdx++;
-      }
-      if (s.seedIdx >= s.seedRuns || Date.now() >= s.deadline) {
-        s.work = s.best.labels.slice();
-        this.labels = s.work;
-        this.evaluate(s.work, 0);
-        s.valid = new Uint8Array(this._valid);
-        s.counts = this.currentCounts(s.work, s.valid);
-        s.eff = s.best.eff; s.M = s.best.M; s.S = s.best.S;
-        s.temp = s.options.temp || (0.25 * Math.max(s.best.eff, 1e-3));
-        s.phase = 'anneal';
-      }
+      // One potential-guided seed (its best-eff cluster), improved with LNS.
+      s.best = this.initialSeed();
+      s.cur = s.best;
+      s.phase = 'improve';
       s.validOut = s.best.valid;
       s.eff = s.best.eff; s.M = s.best.M; s.S = s.best.S;
       return s;
     }
 
-    // anneal
-    var free = this.free, nfree = free.length, ntypes = this.defs.length;
     while (Date.now() < end && Date.now() < s.deadline) {
-      for (var step = 0; step < 64; step++) {
-        s.iterations++;
-        var i = free[(Math.random() * nfree) | 0];
-        var old = s.work[i];
-        var nv, roll = Math.random();
-        if (roll < 0.35) nv = EMPTY;
-        else if (roll < 0.75) nv = (Math.random() * ntypes) | 0;
-        else if (roll < 0.9) nv = CONNECTOR;
-        else { nv = this.suggestValue(i); if (nv == null) nv = (Math.random() * ntypes) | 0; }
-        if (nv === old) continue;
-        // enforce per-coil limits (0 == disabled)
-        if (nv >= 0 && this.maxCounts && this.maxCounts[nv] != null &&
-            nv !== old && s.counts[nv] >= this.maxCounts[nv]) continue;
-        s.work[i] = nv;
-        var e2 = this.evaluate(s.work, 5, this.validScratch);
-        var d = e2 - s.eff;
-        if (d >= 0 || Math.random() < Math.exp(d / s.temp)) {
-          if (old >= 0) s.counts[old]--;
-          if (nv >= 0) s.counts[nv]++;
-          s.eff = e2;
-          s.valid.set(this.validScratch);
-          s.M = this._M; s.S = this._S;
-          if (e2 > s.best.eff) {
-            this.evaluate(s.work, 0);
-            if (this._eff > s.best.eff) {
-              s.best = {
-                labels: s.work.slice(), valid: new Uint8Array(this._valid),
-                M: this._M, S: this._S, eff: this._eff
-              };
-            }
-            s.eff = this._eff; s.M = this._M; s.S = this._S;
-            s.valid.set(this._valid);
-          }
-        } else {
-          s.work[i] = old;
-        }
-      }
-      s.temp *= s.cooling;
-      if (s.temp < 1e-6) s.temp = 1e-6;
+      var fe = this.finalizeLNS(this.lnsStep(s.cur));
+      s.iterations++;
+      // record-to-record travel between basins, keeping the true best
+      if (fe.eff >= s.cur.eff * (1 - this.recordDelta)) s.cur = fe;
+      if (fe.eff > s.best.eff + 1e-12) s.best = fe;
     }
     if (Date.now() >= s.deadline) s.done = true;
     s.validOut = s.best.valid;
+    s.eff = s.best.eff; s.M = s.best.M; s.S = s.best.S;
     return s;
   };
 
