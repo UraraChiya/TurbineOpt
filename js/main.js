@@ -7,6 +7,7 @@
   var Nbt = window.TurbineNbt;
   var Rules = window.TurbineRules;
   var Colors = window.TurbineColors;
+  var Texture = window.TurbineTexture;
   var defs = window.COIL_DEFS;
   var connDef = window.CONNECTOR_DEF;
   var EMPTY = Opt.EMPTY, CONNECTOR = Opt.CONNECTOR, BEARING = Opt.BEARING, RESERVED = Opt.RESERVED;
@@ -99,10 +100,13 @@
 
       var sw = document.createElement('span');
       sw.className = 'sw';
-      var bg = Colors.color(d);
-      sw.style.background = bg;
-      sw.style.color = Colors.textColor(bg);
-      sw.textContent = Colors.label(d);
+      // Icon = the coil's texture only (no text); fall back to a colour block.
+      if (!Texture.apply(sw, d.id, 18)) {
+        var bg = Colors.color(d);
+        sw.style.background = bg;
+        sw.style.color = Colors.textColor(bg);
+        sw.textContent = Colors.label(d);
+      }
 
       var nm = document.createElement('div');
       nm.className = 'nm';
@@ -166,24 +170,33 @@
     var fontSize = Math.max(9, Math.floor(cell * 0.42));
     ctx.font = '600 ' + fontSize + 'px ' + CELL_FONT;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.imageSmoothingEnabled = false; // pixel art: nearest-neighbour
+    var atlasImg = Texture.isReady() ? Texture.image() : null;
     for (var r = 0; r < N; r++) {
       for (var c = 0; c < N; c++) {
         var i = r * N + c, dr = N - 1 - r;
         var x = c * cell, y = dr * cell;
         var lab = labels ? labels[i] : EMPTY;
-        var col, text, tcol = '#0b0f14';
-        if (opt.kind[i] === BEARING) { col = '#39414f'; text = '轴'; tcol = '#c7d2e0'; }
-        else if (opt.kind[i] === RESERVED || lab === RESERVED) { col = '#ffd166'; text = '预'; }
+        var key, col, text;
+        if (opt.kind[i] === BEARING) { key = '__bearing'; col = '#39414f'; text = ''; }
+        else if (opt.kind[i] === RESERVED || lab === RESERVED) { key = '__reserved'; col = '#ffd166'; text = '预'; }
         else if (lab >= 0) {
-          var d = defs[lab]; col = Colors.color(d); text = Colors.label(d); tcol = Colors.textColor(col);
+          var d = defs[lab]; key = d.id; col = Colors.color(d); text = Colors.label(d);
         }
-        else if (lab === CONNECTOR) { col = '#37d0a0'; text = '连'; }
+        else if (lab === CONNECTOR) { key = '__connector'; col = '#37d0a0'; text = '连'; }
         else {
-          col = FILL_COLORS[state.fill] || FILL_COLORS.casing;
-          text = state.fill === 'glass' ? '玻' : '壳'; tcol = '#33505c';
+          key = state.fill === 'glass' ? '__glass' : '__casing';
+          col = FILL_COLORS[state.fill] || FILL_COLORS.casing; text = '';
         }
-        ctx.fillStyle = col;
-        ctx.fillRect(x, y, cell, cell);
+
+        var drew = false;
+        if (atlasImg && Texture.has(key)) {
+          var t = Texture.tile(key);
+          ctx.drawImage(atlasImg, t[0] * 16, t[1] * 16, 16, 16, x, y, cell, cell);
+          drew = true;
+        }
+        if (!drew) { ctx.fillStyle = col; ctx.fillRect(x, y, cell, cell); }
+
         ctx.strokeStyle = 'rgba(0,0,0,.25)';
         ctx.strokeRect(x + .5, y + .5, cell - 1, cell - 1);
         if (opt.kind[i] === RESERVED) {
@@ -191,8 +204,13 @@
           ctx.beginPath(); ctx.moveTo(x + 1, y + cell - 1); ctx.lineTo(x + cell - 1, y + 1); ctx.stroke();
         }
         if (text && cell >= 15) {
-          ctx.fillStyle = tcol;
-          ctx.fillText(text, x + cell / 2, y + cell / 2 + 0.5);
+          var cx = x + cell / 2, cy = y + cell / 2 + 0.5;
+          // Dark outline keeps the 1-2 char label readable over any texture.
+          ctx.lineWidth = Math.max(2, cell * 0.12);
+          ctx.strokeStyle = 'rgba(0,0,0,.78)';
+          if (ctx.strokeText) ctx.strokeText(text, cx, cy);
+          ctx.fillStyle = '#f4f8ff';
+          ctx.fillText(text, cx, cy);
         }
       }
     }
@@ -212,23 +230,25 @@
       else if (lab === CONNECTOR) conn++;
       else wall++;
     }
-    items.push({ color: '#39414f', text: '#c7d2e0', label: '轴', name: '轴承', cnt: bear });
+    items.push({ key: '__bearing', color: '#39414f', text: '#c7d2e0', label: '', name: '轴承', cnt: bear });
     items.push({
-      color: FILL_COLORS[state.fill] || FILL_COLORS.casing, text: '#33505c',
-      label: state.fill === 'glass' ? '玻' : '壳',
+      key: state.fill === 'glass' ? '__glass' : '__casing',
+      color: FILL_COLORS[state.fill] || FILL_COLORS.casing, text: '#33505c', label: '',
       name: state.fill === 'glass' ? '涡轮机玻璃' : '涡轮机外壳', cnt: wall
     });
-    if (resv) items.push({ color: '#ffd166', text: '#0b0f14', label: '预', name: '预留', cnt: resv });
-    if (conn) items.push({ color: '#37d0a0', text: '#0b0f14', label: '连', name: '连接器', cnt: conn, cond: 0 });
+    if (resv) items.push({ key: '__reserved', color: '#ffd166', text: '#0b0f14', label: '预', name: '预留', cnt: resv });
+    if (conn) items.push({ key: '__connector', color: '#37d0a0', text: '#0b0f14', label: '连', name: '连接器', cnt: conn, cond: 0 });
     Object.keys(counts).map(Number).sort(function (a, b) { return defs[b].cond - defs[a].cond; }).forEach(function (idx) {
       var d = defs[idx], col = Colors.color(d);
       items.push({
-        color: col, text: Colors.textColor(col), label: Colors.label(d),
+        key: d.id, color: col, text: Colors.textColor(col), label: Colors.label(d),
         name: (d.nameZh || d.id), cnt: counts[idx], cond: d.cond
       });
     });
     box.innerHTML = items.map(function (it) {
-      return '<div class="item"><span class="swatch" style="background:' + it.color + ';color:' + it.text + '">' +
+      var tex = it.key ? Texture.cssText(it.key, 18) : '';
+      return '<div class="item"><span class="swatch" style="' + tex +
+        'background-color:' + it.color + ';color:' + it.text + '">' +
         esc(it.label || '') + '</span>' +
         '<span>' + esc(it.name) + '</span><span class="cnt">×' + it.cnt + '</span>' +
         (it.cond != null ? '<span class="cond">' + it.cond + '</span>' : '') + '</div>';
@@ -470,6 +490,8 @@
     buildCoilList();
     state.opt = buildOptimizer();
     draw(); renderLegend();
+    // Repaint once the merged texture atlas is available.
+    Texture.load(function () { draw(); renderLegend(); });
 
     $('btn-run').addEventListener('click', start);
     $('btn-pause').addEventListener('click', togglePause);

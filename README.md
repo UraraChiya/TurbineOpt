@@ -82,11 +82,30 @@ NuclearCraft: Overhauled 涡轮机（Turbine）端面**线圈 / 电磁铁布局*
 - 原版 6 种线圈的导电率与规则：NuclearCraft 默认配置。
 - 附加线圈：由 [`tools/parse_coils.py`](tools/parse_coils.py) 解析
   [`scripts/NTP/`](scripts/NTP) 下的 CraftTweaker 脚本生成 [`js/coils.js`](js/coils.js)，
-  并从 [`lang/`](lang) 读取中英文名称。修改脚本后重新运行：
+  并从 [`resources/lang/`](resources/lang) 读取中英文名称。修改脚本后重新运行：
 
   ```bash
-  python3 tools/parse_coils.py
+  uv run python tools/parse_coils.py
   ```
+
+## 材质与图标
+
+界面中的线圈图标与预览网格直接使用游戏内的**真实材质**：
+
+- 附加线圈材质来自 [`resources/textures/blocks/`](resources/textures/blocks) 的 `coil_<id>.png`；
+- 原版 6 种线圈材质取自 mod jar 的 `turbine/dynamo_coil/`；
+- 各线圈对应的具体材质文件名由 [`resources/blockstates/`](resources/blockstates) 中的方块状态决定；
+- 连接器、外壳、玻璃、轴承等部件材质同样取自 jar。
+
+为了减少请求数，所有材质（116 种线圈 + 连接器 / 外壳 / 玻璃 / 轴承 / 预留）被合并为**一张图集**
+`assets/coil-atlas.png`（16×16 格），并由 [`tools/build_atlas.py`](tools/build_atlas.py) 生成
+坐标索引 [`js/atlas.js`](js/atlas.js)。修改或新增材质后重新运行：
+
+```bash
+uv run python tools/build_atlas.py
+```
+
+图集按像素图渲染（`image-rendering: pixelated` / 关闭 `imageSmoothingEnabled`），不做平滑缩放。
 
 ## 目录结构
 
@@ -94,13 +113,17 @@ NuclearCraft: Overhauled 涡轮机（Turbine）端面**线圈 / 电磁铁布局*
 index.html          界面
 css/style.css       样式
 js/coils.js         自动生成的线圈数据（请勿手改）
+js/atlas.js         自动生成的材质图集索引（请勿手改）
 js/rules.js         放置规则解析器
+js/texture.js       材质图集查找 / 图标辅助
 js/optimizer.js     势能贪心 + 大邻域搜索（LNS）优化器
 js/nbt.js           最小 NBT 编码器（含 gzip）
 js/export.js        mcfunction / SNBT / 结构 NBT 导出
 js/main.js          界面逻辑
-tools/parse_coils.py  线圈数据生成脚本
-lang/               中英文本地化
+assets/coil-atlas.png  合并后的材质图集
+tools/parse_coils.py   线圈数据生成脚本
+tools/build_atlas.py   材质图集生成脚本
+resources/          资源包（blockstates / textures / lang）
 scripts/NTP/        NTP 附加线圈定义
 ```
 

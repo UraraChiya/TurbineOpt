@@ -26,7 +26,7 @@ def add(cid, name, cond, rule):
 
 # --- Localisation ----------------------------------------------------------
 def load_lang(fname):
-    path = os.path.join(ROOT, "lang", fname)
+    path = os.path.join(ROOT, "resources", "lang", fname)
     names = {}
     if not os.path.exists(path):
         return names

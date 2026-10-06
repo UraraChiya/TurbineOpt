@@ -1,3 +1,8 @@
 FissionOpt/
 nuclearcraft-1.12.2-2o.9.7.jar
 
+# Python / uv
+.venv/
+__pycache__/
+*.pyc
+
