@@ -230,26 +230,27 @@
       else if (lab === CONNECTOR) conn++;
       else wall++;
     }
-    items.push({ key: '__bearing', color: '#39414f', text: '#c7d2e0', label: '', name: '轴承', cnt: bear });
+    items.push({ key: '__bearing', color: '#39414f', name: '轴承', cnt: bear });
     items.push({
       key: state.fill === 'glass' ? '__glass' : '__casing',
-      color: FILL_COLORS[state.fill] || FILL_COLORS.casing, text: '#33505c', label: '',
+      color: FILL_COLORS[state.fill] || FILL_COLORS.casing,
       name: state.fill === 'glass' ? '涡轮机玻璃' : '涡轮机外壳', cnt: wall
     });
-    if (resv) items.push({ key: '__reserved', color: '#ffd166', text: '#0b0f14', label: '预', name: '预留', cnt: resv });
-    if (conn) items.push({ key: '__connector', color: '#37d0a0', text: '#0b0f14', label: '连', name: '连接器', cnt: conn, cond: 0 });
+    if (resv) items.push({ key: '__reserved', color: '#ffd166', name: '预留', cnt: resv });
+    if (conn) items.push({ key: '__connector', color: '#37d0a0', name: '连接器', cnt: conn, cond: 0 });
     Object.keys(counts).map(Number).sort(function (a, b) { return defs[b].cond - defs[a].cond; }).forEach(function (idx) {
-      var d = defs[idx], col = Colors.color(d);
+      var d = defs[idx];
       items.push({
-        key: d.id, color: col, text: Colors.textColor(col), label: Colors.label(d),
+        key: d.id, color: Colors.color(d),
         name: (d.nameZh || d.id), cnt: counts[idx], cond: d.cond
       });
     });
     box.innerHTML = items.map(function (it) {
       var tex = it.key ? Texture.cssText(it.key, 18) : '';
+      // Icon only: the part name is already shown beside it.
       return '<div class="item"><span class="swatch" style="' + tex +
-        'background-color:' + it.color + ';color:' + it.text + '">' +
-        esc(it.label || '') + '</span>' +
+        'background-color:' + it.color + '">' +
+        '</span>' +
         '<span>' + esc(it.name) + '</span><span class="cnt">×' + it.cnt + '</span>' +
         (it.cond != null ? '<span class="cond">' + it.cond + '</span>' : '') + '</div>';
     }).join('');
