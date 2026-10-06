@@ -149,7 +149,6 @@
 
   // --- rendering ----------------------------------------------------------
   var FILL_COLORS = { casing: '#aab4c2', glass: '#9fd4e0' };
-  var CELL_FONT = '"Microsoft YaHei", "PingFang SC", system-ui, sans-serif';
 
   function draw() {
     var opt = state.opt; if (!opt) return;
@@ -167,9 +166,6 @@
     canvas._cell = cell;
 
     var labels = state.result ? state.result.labels : null;
-    var fontSize = Math.max(9, Math.floor(cell * 0.42));
-    ctx.font = '600 ' + fontSize + 'px ' + CELL_FONT;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.imageSmoothingEnabled = false; // pixel art: nearest-neighbour
     var atlasImg = Texture.isReady() ? Texture.image() : null;
     for (var r = 0; r < N; r++) {
@@ -177,16 +173,16 @@
         var i = r * N + c, dr = N - 1 - r;
         var x = c * cell, y = dr * cell;
         var lab = labels ? labels[i] : EMPTY;
-        var key, col, text;
-        if (opt.kind[i] === BEARING) { key = '__bearing'; col = '#39414f'; text = ''; }
-        else if (opt.kind[i] === RESERVED || lab === RESERVED) { key = '__reserved'; col = '#ffd166'; text = '预'; }
+        var key, col;
+        if (opt.kind[i] === BEARING) { key = '__bearing'; col = '#39414f'; }
+        else if (opt.kind[i] === RESERVED || lab === RESERVED) { key = '__reserved'; col = '#ffd166'; }
         else if (lab >= 0) {
-          var d = defs[lab]; key = d.id; col = Colors.color(d); text = Colors.label(d);
+          var d = defs[lab]; key = d.id; col = Colors.color(d);
         }
-        else if (lab === CONNECTOR) { key = '__connector'; col = '#37d0a0'; text = '连'; }
+        else if (lab === CONNECTOR) { key = '__connector'; col = '#37d0a0'; }
         else {
           key = state.fill === 'glass' ? '__glass' : '__casing';
-          col = FILL_COLORS[state.fill] || FILL_COLORS.casing; text = '';
+          col = FILL_COLORS[state.fill] || FILL_COLORS.casing;
         }
 
         var drew = false;
@@ -202,15 +198,6 @@
         if (opt.kind[i] === RESERVED) {
           ctx.strokeStyle = 'rgba(0,0,0,.55)';
           ctx.beginPath(); ctx.moveTo(x + 1, y + cell - 1); ctx.lineTo(x + cell - 1, y + 1); ctx.stroke();
-        }
-        if (text && cell >= 15) {
-          var cx = x + cell / 2, cy = y + cell / 2 + 0.5;
-          // Dark outline keeps the 1-2 char label readable over any texture.
-          ctx.lineWidth = Math.max(2, cell * 0.12);
-          ctx.strokeStyle = 'rgba(0,0,0,.78)';
-          if (ctx.strokeText) ctx.strokeText(text, cx, cy);
-          ctx.fillStyle = '#f4f8ff';
-          ctx.fillText(text, cx, cy);
         }
       }
     }

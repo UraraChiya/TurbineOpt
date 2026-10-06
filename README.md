@@ -114,6 +114,7 @@ uv run tools/build_atlas.py
 ```
 
 图集按像素图渲染（`image-rendering: pixelated` / 关闭 `imageSmoothingEnabled`），不做平滑缩放。
+所有图标与预览格**只显示材质本身，不叠加文字**；部件名称只在左侧列表与图例的文字部分、以及悬停提示中给出。
 
 ## 目录结构
 
